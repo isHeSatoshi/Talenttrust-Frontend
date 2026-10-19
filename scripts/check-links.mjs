@@ -1,9 +1,13 @@
 // Fast smoke test: every internal link in the nav and in page sources must map to an app route.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const appDir = new URL('../src/app/', import.meta.url).pathname;
-const srcDir = new URL('../src/', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname. On Windows `pathname` yields "/C:/Users/..."
+// with a leading slash, so join() produced "C:\C:\Users\..." and this check
+// could never run there — `npm test` failed before reaching the test runner.
+const appDir = fileURLToPath(new URL('../src/app/', import.meta.url));
+const srcDir = fileURLToPath(new URL('../src/', import.meta.url));
 const nav = JSON.parse(readFileSync(join(srcDir, 'lib/nav.json'), 'utf8'));
 
 const routeExists = (href) => {

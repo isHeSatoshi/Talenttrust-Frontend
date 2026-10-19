@@ -11,6 +11,12 @@
   --ok: #059669;
   --warn: #d97706;
   --bad: #dc2626;
+  --seg-created: #64748b;
+  --seg-funded: #2563eb;
+  --seg-completed: #047857;
+  --seg-disputed: #b45309;
+  --seg-cancelled: #dc2626;
+  --focus: #4f46e5;
   --radius: 14px;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --max: 1120px;
@@ -28,6 +34,12 @@
     --brand: #818cf8;
     --brand-2: #38bdf8;
     --brand-ink: #0b1020;
+    --seg-created: #94a3b8;
+    --seg-funded: #60a5fa;
+    --seg-completed: #34d399;
+    --seg-disputed: #fbbf24;
+    --seg-cancelled: #f87171;
+    --focus: #a5b4fc;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
     color-scheme: dark;
   }
@@ -182,3 +194,35 @@ tr:last-child td { border-bottom: 0; }
 .dash { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; padding-bottom: 64px; }
 @media (min-width: 901px) { .dash > form { position: sticky; top: 84px; } }
 @media (max-width: 900px) { .dash { grid-template-columns: 1fr; } }
+
+/* Protocol stats strip. Segment colours are their own tokens rather than the
+   badge colours: the badges are text on a tinted chip, these are 12px graphical
+   fills that must clear 3:1 against the card surface in both themes. */
+.stats { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); min-width: 0; }
+.stats-title { margin: 0; font-size: 1rem; }
+.stats-retry { margin: 0; }
+.stats-tiles { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; padding: 0; }
+.stats-tile { background: var(--surface-2); border: 1px solid var(--border); border-radius: 11px; padding: 10px 12px; min-width: 0; }
+.stats-label { display: block; font-size: 0.76rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.stats-value { display: block; margin-top: 2px; font-size: 1.35rem; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stats-skeleton { display: block; width: 70%; height: 1.35rem; margin-top: 4px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2), var(--border), var(--surface-2)); background-size: 200% 100%; animation: stats-pulse 1.2s ease-in-out infinite; }
+@keyframes stats-pulse { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .stats-skeleton { animation: none; } }
+/* 2x2 at 375px so the values stay legible instead of squeezing to one row. */
+@media (max-width: 560px) { .stats-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.stats-bar { display: flex; height: 12px; margin-top: 16px; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+.stats-seg { display: block; min-width: 3px; }
+.stats-seg-Created { background: var(--seg-created); }
+.stats-seg-Funded { background: var(--seg-funded); }
+.stats-seg-Completed { background: var(--seg-completed); }
+.stats-seg-Resolved { background: var(--seg-completed); }
+.stats-seg-Disputed { background: var(--seg-disputed); }
+.stats-seg-Cancelled { background: var(--seg-cancelled); }
+
+.stats-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 2px 10px; margin: 10px 0 0; padding: 0; }
+.stats-legend-link { display: inline-flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 7px; font-size: 0.85rem; color: var(--text); }
+.stats-legend-link:hover { background: var(--surface-2); }
+.stats-legend-link:focus-visible, .linklike:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.stats-dot { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.linklike { padding: 0; border: 0; border-radius: 4px; background: none; font: inherit; color: var(--brand); text-decoration: underline; cursor: pointer; }
