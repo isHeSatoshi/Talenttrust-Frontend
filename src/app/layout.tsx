@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import './globals.css';
 import { Header } from '@/components/Header';
@@ -17,7 +18,16 @@ export const viewport: Viewport = {
   themeColor: '#4f46e5',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The per-request CSP nonce, set by src/proxy.ts. Next reads it here and
+  // stamps it onto the script tags it generates, which is what lets the policy
+  // avoid 'unsafe-inline' in script-src.
+  //
+  // Pattern for any future inline script: give it the same nonce.
+  //   <script nonce={nonce} dangerouslySetInnerHTML={{ __html: '…' }} />
+  // An inline script without it is blocked by the policy.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="en">
       <body>
@@ -45,6 +55,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </footer>
+        {/* Carries the nonce so the pattern above has a live, lintable example. */}
+        <script
+          nonce={nonce}
+          type="application/json"
+          id="hy-csp-nonce-probe"
+          dangerouslySetInnerHTML={{ __html: '{"csp":"nonce-based"}' }}
+        />
       </body>
     </html>
   );
