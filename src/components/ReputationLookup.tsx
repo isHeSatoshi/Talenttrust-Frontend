@@ -1,25 +1,51 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { api, Reputation } from '@/lib/api';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { api, ApiError, Reputation } from '@/lib/api';
 
 export function ReputationLookup() {
   const [address, setAddress] = useState('GFREELANCERDEMOBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB');
   const [result, setResult] = useState<Reputation | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Every lookup takes a ticket. Only the newest ticket may write state, so a
+  // slow response for an earlier address can never overwrite a newer one.
+  const latest = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
+
+  // Cancel whatever is in flight when the component goes away: an unmounted
+  // component must not resolve into a state update.
+  useEffect(() => () => inFlight.current?.abort(), []);
 
   const lookup = async (e: FormEvent) => {
     e.preventDefault();
+    const ticket = ++latest.current;
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
+
     setLoading(true);
     setError(null);
     try {
-      setResult(await api<Reputation>(`/api/v1/reputation/${encodeURIComponent(address.trim())}`));
+      const data = await api<Reputation>(
+        `/api/v1/reputation/${encodeURIComponent(address.trim())}`,
+        { signal: controller.signal },
+      );
+      if (ticket !== latest.current) return; // a newer lookup superseded this one
+      setResult(data);
     } catch (err) {
-      setError((err as Error).message);
+      // A cancelled request is not a failure the user needs to see.
+      if (err instanceof ApiError && err.isAborted) return;
+      if (ticket !== latest.current) return;
+      setError(
+        err instanceof ApiError
+          ? err
+          : new ApiError({ kind: 'network', message: (err as Error).message }),
+      );
       setResult(null);
     } finally {
-      setLoading(false);
+      if (ticket === latest.current) setLoading(false);
     }
   };
 
@@ -37,8 +63,8 @@ export function ReputationLookup() {
         </div>
       </form>
       {error && (
-        <div className="alert alert-error" role="alert">
-          {error}
+        <div className="alert alert-error" role="alert" title={error.message}>
+          {error.userMessage}
         </div>
       )}
       {result && (

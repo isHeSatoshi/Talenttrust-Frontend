@@ -1,13 +1,13 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { api, EscrowContract } from '@/lib/api';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { api, ApiError, EscrowContract } from '@/lib/api';
 
 const short = (a: string) => (a.length > 14 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a);
 
 export function EscrowDashboard() {
   const [contracts, setContracts] = useState<EscrowContract[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState({
     title: 'Website redesign',
@@ -16,19 +16,39 @@ export function EscrowDashboard() {
     milestones: 'Design: 300, Build: 700',
   });
 
+  // The newest load owns the UI: a superseded request is aborted, and its
+  // rejection is ignored rather than clearing state or flashing an error.
+  const loadTicket = useRef(0);
+  const inFlight = useRef<AbortController | null>(null);
+
   const load = useCallback(async () => {
+    const ticket = ++loadTicket.current;
+    inFlight.current?.abort();
+    const controller = new AbortController();
+    inFlight.current = controller;
+
     try {
-      const res = await api<{ data: EscrowContract[] }>('/api/v1/contracts');
-      setContracts(res.data.sort((a, b) => b.id - a.id));
+      const res = await api<{ data: EscrowContract[] }>('/api/v1/contracts', {
+        signal: controller.signal,
+      });
+      if (ticket !== loadTicket.current) return;
+      setContracts([...res.data].sort((a, b) => b.id - a.id));
       setError(null);
     } catch (e) {
-      setError(`Could not reach the API: ${(e as Error).message}`);
+      if (e instanceof ApiError && e.isAborted) return;
+      if (ticket !== loadTicket.current) return;
+      setError(
+        e instanceof ApiError
+          ? e
+          : new ApiError({ kind: 'network', message: (e as Error).message }),
+      );
       setContracts([]);
     }
   }, []);
 
   useEffect(() => {
     load();
+    return () => inFlight.current?.abort();
   }, [load]);
 
   const act = async (id: number | 'new', fn: () => Promise<unknown>) => {
@@ -38,7 +58,12 @@ export function EscrowDashboard() {
       await fn();
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      if (e instanceof ApiError && e.isAborted) return;
+      setError(
+        e instanceof ApiError
+          ? e
+          : new ApiError({ kind: 'network', message: (e as Error).message }),
+      );
     } finally {
       setBusy(null);
     }
@@ -90,8 +115,8 @@ export function EscrowDashboard() {
 
       <div className="stack" style={{ minWidth: 0 }}>
         {error && (
-          <div className="alert alert-error" role="alert">
-            {error}
+          <div className="alert alert-error" role="alert" title={error.message}>
+            {error.userMessage}
           </div>
         )}
         {contracts === null && <div className="card muted">Loading escrows...</div>}
