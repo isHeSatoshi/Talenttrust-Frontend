@@ -28,6 +28,14 @@ export interface Reputation {
   averageRating: number;
 }
 
+/** An error thrown by `api`, carrying the API's own failure code and status. */
+export interface ApiFailure extends Error {
+  /** HTTP status, when the request reached the API at all. */
+  status?: number;
+  /** The API's machine-readable code, e.g. `over_funded`. */
+  code?: string;
+}
+
 export async function api<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const res = await fetch(`${site.apiUrl}${path}`, {
     method: init?.method ?? 'GET',
@@ -35,9 +43,15 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
     cache: 'no-store',
   });
-  const data = await res.json().catch(() => ({}));
+  const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
   if (!res.ok) {
-    throw new Error((data as { message?: string }).message || `Request failed (${res.status})`);
+    // The API answers failures as `{ error: <code>, message: <text> }`. Carrying
+    // the code lets a caller write copy for a specific failure instead of
+    // matching on the message text.
+    const failure = new Error(data.message || `Request failed (${res.status})`) as ApiFailure;
+    failure.status = res.status;
+    failure.code = data.error;
+    throw failure;
   }
   return data as T;
 }

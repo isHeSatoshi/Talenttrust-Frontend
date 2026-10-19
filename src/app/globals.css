@@ -11,6 +11,9 @@
   --ok: #059669;
   --warn: #d97706;
   --bad: #dc2626;
+  /* Error text sitting on --surface-2. #dc2626 measures 4.36:1 there, just
+     under AA for body text; this measures 5.84:1. */
+  --bad-ink: #b91c1c;
   --radius: 14px;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --max: 1120px;
@@ -29,6 +32,9 @@
     --brand-2: #38bdf8;
     --brand-ink: #0b1020;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+    /* #dc2626 measures 3.27:1 on the dark surface, failing AA outright; this
+       measures 8.33:1. */
+    --bad-ink: #fca5a5;
     color-scheme: dark;
   }
 }
@@ -163,7 +169,22 @@ tr:last-child td { border-bottom: 0; }
 .progress { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
 .alert { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); font-size: 0.93rem; }
-.alert-error { border-color: color-mix(in srgb, var(--bad) 40%, transparent); color: var(--bad); }
+.alert-error { border-color: color-mix(in srgb, var(--bad) 40%, transparent); color: var(--bad-ink); }
+
+/* Inline funding control (#1448) */
+.fund { display: grid; gap: 10px; margin: 14px 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.fund .field { gap: 4px; }
+.fund .field label { font-size: 0.85rem; }
+.fund-meta { margin: 0; }
+/* Funded vs. total: green rather than the released bar's brand gradient, so the
+   two bars are not read as the same metric. --border for the track keeps the
+   fill above 3:1 against it in both themes. */
+.fund-bar { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.fund-bar > span { display: block; height: 100%; background: var(--ok); }
+.fund-error { margin: 0; color: var(--bad-ink); font-size: 0.87rem; font-weight: 500; }
+/* 5.67:1 light / 5.30:1 dark, where the shared .input:focus outline measures 2.2:1. */
+.fund .input:focus-visible,
+.fund .btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .muted { color: var(--muted); }
 .small { font-size: 0.87rem; }
 .stack { display: grid; gap: 14px; }

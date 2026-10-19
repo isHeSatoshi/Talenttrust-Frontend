@@ -2,6 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api, EscrowContract } from '@/lib/api';
+import { FundControl } from '@/components/escrow/FundControl';
+import { toStroops } from '@/lib/deposit';
 
 const short = (a: string) => (a.length > 14 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a);
 
@@ -39,6 +41,21 @@ export function EscrowDashboard() {
       await load();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * A failed deposit belongs to the control that raised it, so this
+   * deliberately does not route errors to the global banner: it rethrows and
+   * FundControl renders the message inline.
+   */
+  const deposit = async (id: number, amount: number) => {
+    setBusy(id);
+    try {
+      await api(`/api/v1/contracts/${id}/deposit`, { method: 'POST', body: { amount } });
+      await load();
     } finally {
       setBusy(null);
     }
@@ -131,21 +148,18 @@ export function EscrowDashboard() {
                   </li>
                 ))}
               </ul>
+              {active && c.fundedAmount < c.totalAmount && (
+                <FundControl
+                  contract={c}
+                  busy={busy === c.id}
+                  onDeposit={(amount) => deposit(c.id, amount)}
+                />
+              )}
               <div className="row">
-                {active && c.fundedAmount < c.totalAmount && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    disabled={busy === c.id}
-                    onClick={() =>
-                      act(c.id, () =>
-                        api(`/api/v1/contracts/${c.id}/deposit`, { method: 'POST', body: { amount: c.totalAmount - c.fundedAmount } }),
-                      )
-                    }
-                  >
-                    Fund {c.totalAmount - c.fundedAmount} {c.token}
-                  </button>
-                )}
-                {active && next && c.fundedAmount - c.releasedAmount >= next.amount && (
+                {/* Compared in stroops: as doubles, a fully funded fractional
+                    escrow can compare as short and hide a releasable
+                    milestone. Same boundary as the deposit check. */}
+                {active && next && toStroops(c.fundedAmount) - toStroops(c.releasedAmount) >= toStroops(next.amount) && (
                   <button
                     className="btn btn-primary btn-sm"
                     disabled={busy === c.id}
