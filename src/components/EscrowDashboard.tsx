@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api, EscrowContract } from '@/lib/api';
+import { EscrowCardSkeleton, LoadingAnnouncement } from '@/components/ui/Skeleton';
 
 const short = (a: string) => (a.length > 14 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a);
 
@@ -94,7 +95,15 @@ export function EscrowDashboard() {
             {error}
           </div>
         )}
-        {contracts === null && <div className="card muted">Loading escrows...</div>}
+        {contracts === null && (
+          <div className="stack" aria-busy="true">
+            {/* Announced once for the region; the cards themselves are decorative. */}
+            <LoadingAnnouncement label="Loading escrows" />
+            {[0, 1, 2].map((i) => (
+              <EscrowCardSkeleton key={i} />
+            ))}
+          </div>
+        )}
         {contracts?.length === 0 && !error && <div className="card muted">No escrows yet. Create the first one.</div>}
         {contracts?.map((c) => {
           const next = c.milestones.find((m) => !m.released);

@@ -182,3 +182,54 @@ tr:last-child td { border-bottom: 0; }
 .dash { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; padding-bottom: 64px; }
 @media (min-width: 901px) { .dash > form { position: sticky; top: 84px; } }
 @media (max-width: 900px) { .dash { grid-template-columns: 1fr; } }
+
+/* Loading skeletons (issue #1462) */
+
+/* Announce loading to assistive technology without showing text. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skeleton {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+.skeleton-line { height: 0.9rem; border-radius: 4px; }
+.skeleton-block { border-radius: var(--radius); }
+
+/* Shimmer sweep. */
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--border) 70%, transparent),
+    transparent
+  );
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* Respect the OS setting: the placeholder becomes a static block that still
+   reserves the same space, so the layout-shift benefit is unaffected. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; content: none; }
+}
