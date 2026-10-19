@@ -2,12 +2,34 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { api, EscrowContract } from '@/lib/api';
+import {
+  AmountError,
+  formatAmount,
+  fromApiNumber,
+  gte,
+  isZero,
+  parseAmount,
+  percentage,
+  sub,
+  toApiNumber,
+} from '@/lib/amount';
 
 const short = (a: string) => (a.length > 14 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a);
 
+/**
+ * Copy for the alert. An `AmountError` already carries a user-safe sentence;
+ * anything else keeps the original "Could not reach the API" framing so this
+ * change does not alter the wording users already see.
+ */
+function toUiError(err: unknown): { userMessage: string; message: string } {
+  if (err instanceof AmountError) return { userMessage: err.message, message: err.message };
+  const detail = err instanceof Error ? err.message : String(err);
+  return { userMessage: `Could not reach the API: ${detail}`, message: detail };
+}
+
 export function EscrowDashboard() {
   const [contracts, setContracts] = useState<EscrowContract[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ userMessage: string; message: string } | null>(null);
   const [busy, setBusy] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState({
     title: 'Website redesign',
@@ -22,7 +44,7 @@ export function EscrowDashboard() {
       setContracts(res.data.sort((a, b) => b.id - a.id));
       setError(null);
     } catch (e) {
-      setError(`Could not reach the API: ${(e as Error).message}`);
+      setError(toUiError(e));
       setContracts([]);
     }
   }, []);
@@ -38,7 +60,7 @@ export function EscrowDashboard() {
       await fn();
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      setError(toUiError(e));
     } finally {
       setBusy(null);
     }
@@ -46,14 +68,22 @@ export function EscrowDashboard() {
 
   const create = (e: FormEvent) => {
     e.preventDefault();
-    const milestones = form.milestones
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part, i) => {
-        const [title, amount] = part.includes(':') ? part.split(':') : [`Milestone ${i + 1}`, part];
-        return { title: title.trim(), amount: Number(amount) };
-      });
+    let milestones;
+    try {
+      // Parse in stroops, then hand the API a number. An amount that cannot be
+      // read exactly is rejected here rather than silently truncated to a float.
+      milestones = form.milestones
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part, i) => {
+          const [title, amount] = part.includes(':') ? part.split(':') : [`Milestone ${i + 1}`, part];
+          return { title: title.trim(), amount: toApiNumber(parseAmount((amount ?? '').trim())) };
+        });
+    } catch (err) {
+      setError(toUiError(err));
+      return;
+    }
     act('new', () =>
       api('/api/v1/contracts', {
         method: 'POST',
@@ -90,8 +120,8 @@ export function EscrowDashboard() {
 
       <div className="stack" style={{ minWidth: 0 }}>
         {error && (
-          <div className="alert alert-error" role="alert">
-            {error}
+          <div className="alert alert-error" role="alert" title={error.message}>
+            {error.userMessage}
           </div>
         )}
         {contracts === null && <div className="card muted">Loading escrows...</div>}
@@ -99,7 +129,17 @@ export function EscrowDashboard() {
         {contracts?.map((c) => {
           const next = c.milestones.find((m) => !m.released);
           const active = c.status === 'Created' || c.status === 'Funded';
-          const pct = c.totalAmount ? Math.round((c.releasedAmount / c.totalAmount) * 100) : 0;
+
+          // All money is bigint stroops. Reading the API's doubles once, here,
+          // keeps every comparison and subtraction exact from this point on.
+          const total = fromApiNumber(c.totalAmount);
+          const funded = fromApiNumber(c.fundedAmount);
+          const released = fromApiNumber(c.releasedAmount);
+          const inEscrow = sub(funded, released);
+          const toFund = sub(total, funded);
+          const pct = percentage(released, total);
+          // The guard that float math could get wrong: 0.3 - 0 >= 0.2 must hold.
+          const canRelease = next !== undefined && gte(inEscrow, fromApiNumber(next.amount));
           return (
             <article className="card" key={c.id}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -115,9 +155,9 @@ export function EscrowDashboard() {
               <div className="progress" aria-label={`${pct}% released`}>
                 <span style={{ width: `${pct}%` }} />
               </div>
-              <p className="small muted" style={{ margin: '8px 0 0' }}>
-                Released {c.releasedAmount} / {c.totalAmount} {c.token} &middot; In escrow{' '}
-                {c.fundedAmount - c.releasedAmount} {c.token}
+              <p className="small muted amount" style={{ margin: '8px 0 0' }}>
+                Released {formatAmount(released, { token: c.token })} / {formatAmount(total, { token: c.token })}{' '}
+                &middot; In escrow {formatAmount(inEscrow, { token: c.token })}
               </p>
               <ul className="milestones">
                 {c.milestones.map((m) => (
@@ -125,27 +165,27 @@ export function EscrowDashboard() {
                     <span className="truncate">
                       {m.released ? '[x]' : '[ ]'} {m.title}
                     </span>
-                    <span className="mono">
-                      {m.amount} {c.token}
+                    <span className="mono amount">
+                      {formatAmount(fromApiNumber(m.amount), { token: c.token })}
                     </span>
                   </li>
                 ))}
               </ul>
               <div className="row">
-                {active && c.fundedAmount < c.totalAmount && (
+                {active && !isZero(toFund) && (
                   <button
                     className="btn btn-primary btn-sm"
                     disabled={busy === c.id}
                     onClick={() =>
                       act(c.id, () =>
-                        api(`/api/v1/contracts/${c.id}/deposit`, { method: 'POST', body: { amount: c.totalAmount - c.fundedAmount } }),
+                        api(`/api/v1/contracts/${c.id}/deposit`, { method: 'POST', body: { amount: toApiNumber(toFund) } }),
                       )
                     }
                   >
-                    Fund {c.totalAmount - c.fundedAmount} {c.token}
+                    Fund {formatAmount(toFund, { token: c.token })}
                   </button>
                 )}
-                {active && next && c.fundedAmount - c.releasedAmount >= next.amount && (
+                {active && canRelease && next && (
                   <button
                     className="btn btn-primary btn-sm"
                     disabled={busy === c.id}

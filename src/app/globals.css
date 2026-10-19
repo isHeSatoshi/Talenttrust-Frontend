@@ -182,3 +182,6 @@ tr:last-child td { border-bottom: 0; }
 .dash { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px; align-items: start; padding-bottom: 64px; }
 @media (min-width: 901px) { .dash > form { position: sticky; top: 84px; } }
 @media (max-width: 900px) { .dash { grid-template-columns: 1fr; } }
+
+/* Amounts: tabular figures keep digits aligned across rows (issue #1468). */
+.amount { font-variant-numeric: tabular-nums; }
